@@ -194,6 +194,7 @@ export default function Home() {
   const [descValue, setDescValue] = useState("");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
+  const [scanProgress, setScanProgress] = useState<{ step: number; total: number; label: string } | null>(null);
 
   const fetchPackages = async () => {
     setLoading(true);
@@ -224,17 +225,32 @@ export default function Home() {
 
   const handleScan = async () => {
     setScanning(true);
+    setScanProgress({ step: 0, total: 5, label: "" });
     try {
-      const res = await fetch("/api/packages/scan", { method: "POST" });
-      const data = await res.json();
-      toast.success(t.scanned.replace("{n}", data.count));
-      await fetchPackages();
-      await fetchCategories();
-      await fetchHistory();
+      const es = new EventSource("/api/packages/scan-stream");
+      es.onmessage = async (event) => {
+        const data = JSON.parse(event.data);
+        setScanProgress({ step: data.step, total: data.total, label: data.label || "" });
+        if (data.status === "complete") {
+          es.close();
+          toast.success(t.scanned.replace("{n}", data.count));
+          await fetchPackages();
+          await fetchCategories();
+          await fetchHistory();
+          setScanning(false);
+          setScanProgress(null);
+        }
+      };
+      es.onerror = () => {
+        es.close();
+        toast.error(t.scanFailed);
+        setScanning(false);
+        setScanProgress(null);
+      };
     } catch {
       toast.error(t.scanFailed);
-    } finally {
       setScanning(false);
+      setScanProgress(null);
     }
   };
 
@@ -483,14 +499,29 @@ export default function Home() {
                 </button>
               ))}
             </div>
-            <button
-              onClick={handleScan}
-              disabled={scanning}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
-            >
-              <RefreshCw className={`w-4 h-4 ${scanning ? "animate-spin" : ""}`} />
-              {scanning ? t.scanning : t.scan}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleScan}
+                disabled={scanning}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
+              >
+                <RefreshCw className={`w-4 h-4 ${scanning ? "animate-spin" : ""}`} />
+                {scanning ? t.scanning : t.scan}
+              </button>
+              {scanProgress && (
+                <div className="flex items-center gap-2 min-w-[180px]">
+                  <div className="flex-1 h-2 bg-gray-200 dark:bg-neutral-700 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                      style={{ width: `${(scanProgress.step / scanProgress.total) * 100}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] text-gray-400 whitespace-nowrap">
+                    {scanProgress.step}/{scanProgress.total} {scanProgress.label}
+                  </span>
+                </div>
+              )}
+            </div>
             <button
               onClick={handleCheckUpdates}
               disabled={checking}

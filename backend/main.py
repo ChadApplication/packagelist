@@ -76,6 +76,38 @@ async def scan_packages():
     return {"status": "ok", "count": len(packages), "snapshot_id": snapshot_id}
 
 
+@app.get("/api/packages/scan-stream")
+async def scan_stream():
+    """SSE endpoint: stream scan progress step by step."""
+    import json as _json
+
+    async def generate():
+        steps = [
+            ("brew-formulae", "Homebrew Formulae", scanner._scan_brew_formulae),
+            ("brew-casks", "Homebrew Casks", scanner._scan_brew_casks),
+            ("pip", "Python (pip)", scanner._scan_pip),
+            ("uv-tools", "Python (uv)", scanner._scan_uv_tools),
+            ("r-packages", "R Packages", scanner._scan_r_packages),
+        ]
+        total_steps = len(steps)
+        all_packages = []
+
+        for i, (step_id, label, scan_fn) in enumerate(steps):
+            yield f"data: {_json.dumps({'step': i+1, 'total': total_steps, 'label': label, 'status': 'scanning'})}\n\n"
+            try:
+                pkgs = await scan_fn()
+                all_packages.extend(pkgs)
+                yield f"data: {_json.dumps({'step': i+1, 'total': total_steps, 'label': label, 'status': 'done', 'count': len(pkgs)})}\n\n"
+            except Exception as e:
+                yield f"data: {_json.dumps({'step': i+1, 'total': total_steps, 'label': label, 'status': 'error', 'error': str(e)})}\n\n"
+
+        store.save(all_packages)
+        snapshot_id = _save_snapshot(all_packages)
+        yield f"data: {_json.dumps({'step': total_steps, 'total': total_steps, 'status': 'complete', 'count': len(all_packages), 'snapshot_id': snapshot_id})}\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
+
+
 @app.get("/api/packages/history")
 def get_history():
     """List all scan snapshots."""
