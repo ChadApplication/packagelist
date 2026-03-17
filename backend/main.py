@@ -156,6 +156,20 @@ def download_snapshot(snapshot_id: str, fmt: str):
     )
 
 
+@app.delete("/api/packages/history/{snapshot_id}")
+def delete_snapshot(snapshot_id: str):
+    """Delete a scan snapshot."""
+    deleted = []
+    for ext in ("json", "csv", "md"):
+        fpath = os.path.join(HISTORY_DIR, f"{snapshot_id}.{ext}")
+        if os.path.exists(fpath):
+            os.remove(fpath)
+            deleted.append(ext)
+    if not deleted:
+        return {"status": "error", "message": "Snapshot not found"}
+    return {"status": "ok", "deleted": deleted}
+
+
 @app.get("/api/packages")
 def get_packages(category: Optional[str] = None, q: Optional[str] = None):
     """Get stored package list with optional filtering."""

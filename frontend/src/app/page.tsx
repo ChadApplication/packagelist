@@ -650,6 +650,16 @@ export default function Home() {
                               <FileDown className="w-2.5 h-2.5" />MD
                             </a>
                           )}
+                          <button
+                            onClick={async () => {
+                              await fetch(`/api/packages/history/${snap.id}`, { method: "DELETE" });
+                              fetchHistory();
+                            }}
+                            className="px-1.5 py-0.5 text-[10px] text-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
+                            title="Delete"
+                          >
+                            <X className="w-2.5 h-2.5" />
+                          </button>
                         </div>
                       </div>
                     </div>
