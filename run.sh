@@ -34,40 +34,12 @@ else
 fi
 
 get_free_port() {
-    local base_port=$1
-    local port=$base_port
-    local global_ports_file="$SCRIPT_DIR/../.allocated_ports"
-    
-    # We use a simple lock directory to make writing to the allocation file atomic
-    local lockdir="$SCRIPT_DIR/../.port_allocation.lock"
-    
-    while true; do
-        # Try to acquire the lock
-        if mkdir "$lockdir" 2>/dev/null; then
-            # Inside the critical section
-            
-            # Ensure the allocation file exists
-            touch "$global_ports_file"
-            
-            # Check if port is running via lsof OR if it is in the allocation file
-            while lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1 || grep -q "^${port}$" "$global_ports_file"; do
-                port=$((port + 1))
-            done
-            
-            # We found a free port, record it so other concurrent scripts don't claim it
-            echo "$port" >> "$global_ports_file"
-            
-            # Free the lock
-            rmdir "$lockdir"
-            
-            # Return the port
-            echo $port
-            break
-        else
-            # Wait and retry if locked
-            sleep 0.5
-        fi
+    local port=$1
+    # lsof-only: no file-based allocation, no stale state
+    while lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1; do
+        port=$((port + 1))
     done
+    echo $port
 }
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -131,17 +103,6 @@ stop_servers() {
     echo -e "${BLUE}=========================================${NC}"
     _kill_all
     _wait_ports_free 8
-    
-    # Remove from global registry
-    if [ -f "$PORTS_FILE" ]; then
-        source "$PORTS_FILE"
-        local global_ports_file="$SCRIPT_DIR/../.allocated_ports"
-        if [ -f "$global_ports_file" ]; then
-            sed -i.bak "/^${BACKEND_PORT}$/d" "$global_ports_file" 2>/dev/null || true
-            sed -i.bak "/^${FRONTEND_PORT}$/d" "$global_ports_file" 2>/dev/null || true
-            rm -f "${global_ports_file}.bak"
-        fi
-    fi
     
     rm -f "$PORTS_FILE"
     echo -e "${GREEN}Shutdown complete. All ports freed.${NC}"
