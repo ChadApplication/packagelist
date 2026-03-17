@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { Package, RefreshCw, Search, ArrowUpCircle, ChevronRight, ChevronDown, Edit3, Check, X, Globe, ChevronsUpDown, Download, ExternalLink, BookOpen, RotateCw, ArrowUpAZ, ArrowDownAZ } from "lucide-react";
+import { Package, RefreshCw, Search, ArrowUpCircle, ChevronRight, ChevronDown, Edit3, Check, X, Globe, ChevronsUpDown, Download, ExternalLink, BookOpen, RotateCw, ArrowUpAZ, ArrowDownAZ, History, FileDown } from "lucide-react";
 import toast from "react-hot-toast";
 
 type Lang = "en" | "ko" | "zh";
@@ -51,6 +51,7 @@ const i18n: Record<Lang, Record<string, string>> = {
     "cat:GUI App": "GUI App",
     "cat:Python (pip)": "Python (pip)",
     "cat:Python (uv tool)": "Python (uv tool)",
+    history: "Scan History",
     "cat:Utility": "Utility",
     "cat:R": "R",
   },
@@ -98,6 +99,7 @@ const i18n: Record<Lang, Record<string, string>> = {
     "cat:GUI App": "GUI 앱",
     "cat:Python (pip)": "Python (pip)",
     "cat:Python (uv tool)": "Python (uv tool)",
+    history: "스캔 기록",
     "cat:Utility": "유틸리티",
     "cat:R": "R 패키지",
   },
@@ -145,10 +147,19 @@ const i18n: Record<Lang, Record<string, string>> = {
     "cat:GUI App": "GUI 应用",
     "cat:Python (pip)": "Python (pip)",
     "cat:Python (uv tool)": "Python (uv tool)",
+    history: "扫描记录",
     "cat:Utility": "实用工具",
     "cat:R": "R 软件包",
   },
 };
+
+interface Snapshot {
+  id: string;
+  date: string;
+  count: number;
+  has_csv: boolean;
+  has_md: boolean;
+}
 
 interface PackageInfo {
   name: string;
@@ -182,6 +193,7 @@ export default function Home() {
   const [editingDesc, setEditingDesc] = useState<string | null>(null);
   const [descValue, setDescValue] = useState("");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
 
   const fetchPackages = async () => {
     setLoading(true);
@@ -202,6 +214,14 @@ export default function Home() {
     } catch { /* ignore */ }
   };
 
+  const fetchHistory = async () => {
+    try {
+      const res = await fetch("/api/packages/history");
+      const data = await res.json();
+      setSnapshots(data.snapshots || []);
+    } catch { /* ignore */ }
+  };
+
   const handleScan = async () => {
     setScanning(true);
     try {
@@ -210,6 +230,7 @@ export default function Home() {
       toast.success(t.scanned.replace("{n}", data.count));
       await fetchPackages();
       await fetchCategories();
+      await fetchHistory();
     } catch {
       toast.error(t.scanFailed);
     } finally {
@@ -345,6 +366,7 @@ export default function Home() {
   useEffect(() => {
     fetchPackages();
     fetchCategories();
+    fetchHistory();
   }, []);
 
   const filtered = useMemo(() => {
@@ -377,7 +399,18 @@ export default function Home() {
     for (const pkgs of Object.values(groups)) {
       pkgs.sort((a, b) => mult * a.name.localeCompare(b.name));
     }
-    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
+    // Custom sort: brew first, then pip, uv, r, by source order
+    const sourceOrder: Record<string, number> = {
+      "brew-formula": 0, "brew-cask": 1, "pip": 2, "uv-tool": 3, "r-package": 4,
+    };
+    return Object.entries(groups).sort(([a], [b]) => {
+      const srcA = a.split("::")[0];
+      const srcB = b.split("::")[0];
+      const orderA = sourceOrder[srcA] ?? 99;
+      const orderB = sourceOrder[srcB] ?? 99;
+      if (orderA !== orderB) return orderA - orderB;
+      return a.localeCompare(b);
+    });
   }, [filtered, sortOrder]);
 
   const toggleCategory = (key: string) => {
@@ -550,6 +583,47 @@ export default function Home() {
                   </button>
                 ))}
             </nav>
+
+            {/* Scan History */}
+            {snapshots.length > 0 && (
+              <div className="mt-4">
+                <div className="flex items-center gap-1.5 px-1 mb-1.5 text-xs font-medium text-gray-500 dark:text-gray-400">
+                  <History className="w-3.5 h-3.5" />
+                  {t.history}
+                </div>
+                <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg overflow-hidden max-h-48 overflow-y-auto">
+                  {snapshots.map(snap => (
+                    <div
+                      key={snap.id}
+                      className="px-3 py-2 text-xs border-b border-gray-50 dark:border-neutral-800/50 last:border-0"
+                    >
+                      <div className="text-gray-600 dark:text-gray-300">{snap.date}</div>
+                      <div className="flex items-center justify-between mt-1">
+                        <span className="text-gray-400">{snap.count} pkgs</span>
+                        <div className="flex items-center gap-1">
+                          {snap.has_csv && (
+                            <a
+                              href={`/api/packages/history/${snap.id}/csv`}
+                              className="px-1.5 py-0.5 text-[10px] bg-gray-100 dark:bg-neutral-800 rounded hover:bg-gray-200 dark:hover:bg-neutral-700 flex items-center gap-0.5"
+                            >
+                              <FileDown className="w-2.5 h-2.5" />CSV
+                            </a>
+                          )}
+                          {snap.has_md && (
+                            <a
+                              href={`/api/packages/history/${snap.id}/md`}
+                              className="px-1.5 py-0.5 text-[10px] bg-gray-100 dark:bg-neutral-800 rounded hover:bg-gray-200 dark:hover:bg-neutral-700 flex items-center gap-0.5"
+                            >
+                              <FileDown className="w-2.5 h-2.5" />MD
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </aside>
 

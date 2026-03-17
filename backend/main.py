@@ -10,6 +10,7 @@ import csv
 import io
 import os
 import subprocess
+from datetime import datetime
 
 app = FastAPI(title="PackageList API", version="1.0.0")
 
@@ -32,12 +33,95 @@ def health():
     return {"status": "ok"}
 
 
+HISTORY_DIR = os.path.join(DATA_DIR, "history")
+os.makedirs(HISTORY_DIR, exist_ok=True)
+
+
+def _save_snapshot(packages: list[dict]) -> str:
+    """Save a timestamped snapshot and return the snapshot ID."""
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    snapshot_id = ts
+
+    # Save JSON
+    import json as _json
+    with open(os.path.join(HISTORY_DIR, f"{ts}.json"), "w", encoding="utf-8") as f:
+        _json.dump(packages, f, ensure_ascii=False, indent=2)
+
+    # Save CSV
+    with open(os.path.join(HISTORY_DIR, f"{ts}.csv"), "w", encoding="utf-8", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["Source", "Category", "Name", "Version", "Description", "Homepage", "Memo"])
+        for p in sorted(packages, key=lambda x: (x.get("source", ""), x.get("name", ""))):
+            writer.writerow([p.get("source"), p.get("category"), p.get("name"),
+                             p.get("version"), p.get("description"), p.get("homepage"), p.get("memo")])
+
+    # Save MD
+    with open(os.path.join(HISTORY_DIR, f"{ts}.md"), "w", encoding="utf-8") as f:
+        f.write(f"# Package List ({ts})\n\n")
+        f.write(f"Total: {len(packages)} packages\n\n")
+        f.write("| Source | Category | Name | Version | Description |\n")
+        f.write("|--------|----------|------|---------|-------------|\n")
+        for p in sorted(packages, key=lambda x: (x.get("source", ""), x.get("category", ""), x.get("name", ""))):
+            f.write(f"| {p.get('source','')} | {p.get('category','')} | {p.get('name','')} | {p.get('version','')} | {p.get('description','')[:60]} |\n")
+
+    return snapshot_id
+
+
 @app.post("/api/packages/scan")
 async def scan_packages():
     """Run a full scan of all package sources."""
     packages = await scanner.scan_all()
     store.save(packages)
-    return {"status": "ok", "count": len(packages)}
+    snapshot_id = _save_snapshot(packages)
+    return {"status": "ok", "count": len(packages), "snapshot_id": snapshot_id}
+
+
+@app.get("/api/packages/history")
+def get_history():
+    """List all scan snapshots."""
+    snapshots = []
+    if os.path.exists(HISTORY_DIR):
+        seen = set()
+        for fname in sorted(os.listdir(HISTORY_DIR), reverse=True):
+            if fname.endswith(".json"):
+                snap_id = fname.replace(".json", "")
+                if snap_id not in seen:
+                    seen.add(snap_id)
+                    fpath = os.path.join(HISTORY_DIR, fname)
+                    size = os.path.getsize(fpath)
+                    # Parse count from file
+                    try:
+                        import json as _json
+                        with open(fpath, "r") as f:
+                            count = len(_json.load(f))
+                    except Exception:
+                        count = 0
+                    snapshots.append({
+                        "id": snap_id,
+                        "date": f"{snap_id[:4]}-{snap_id[4:6]}-{snap_id[6:8]} {snap_id[9:11]}:{snap_id[11:13]}:{snap_id[13:15]}",
+                        "count": count,
+                        "has_csv": os.path.exists(os.path.join(HISTORY_DIR, f"{snap_id}.csv")),
+                        "has_md": os.path.exists(os.path.join(HISTORY_DIR, f"{snap_id}.md")),
+                    })
+    return {"snapshots": snapshots}
+
+
+@app.get("/api/packages/history/{snapshot_id}/{fmt}")
+def download_snapshot(snapshot_id: str, fmt: str):
+    """Download a historical snapshot as CSV or MD."""
+    if fmt not in ("csv", "md", "json"):
+        return {"status": "error", "message": "Format must be csv, md, or json"}
+    fpath = os.path.join(HISTORY_DIR, f"{snapshot_id}.{fmt}")
+    if not os.path.exists(fpath):
+        return {"status": "error", "message": "Snapshot not found"}
+    media = {"csv": "text/csv", "md": "text/markdown", "json": "application/json"}
+    with open(fpath, "rb") as f:
+        content = f.read()
+    return StreamingResponse(
+        io.BytesIO(content),
+        media_type=media[fmt],
+        headers={"Content-Disposition": f"attachment; filename=packages_{snapshot_id}.{fmt}"},
+    )
 
 
 @app.get("/api/packages")
