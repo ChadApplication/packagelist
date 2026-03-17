@@ -51,6 +51,7 @@ class PackageScanner:
             self._scan_brew_casks(),
             self._scan_pip(),
             self._scan_uv_tools(),
+            self._scan_r_packages(),
         )
         packages = []
         for group in results:
@@ -236,6 +237,75 @@ class PackageScanner:
                     "homepage": homepage,
                     "source": "uv-tool",
                     "category": "Python (uv tool)",
+                    "memo": "",
+                    "update_available": False,
+                })
+            return packages
+        return await asyncio.to_thread(_do)
+
+    async def _scan_r_packages(self) -> list[dict]:
+        def _do():
+            # Get R packages as JSON via Rscript
+            r_code = """
+pkgs <- installed.packages()
+result <- data.frame(
+  name = pkgs[, "Package"],
+  version = pkgs[, "Version"],
+  stringsAsFactors = FALSE
+)
+# Get titles (descriptions) from package metadata
+result$title <- sapply(result$name, function(p) {
+  tryCatch(packageDescription(p)$Title, error = function(e) "")
+})
+result$homepage <- sapply(result$name, function(p) {
+  tryCatch({
+    url <- packageDescription(p)$URL
+    if (!is.null(url)) strsplit(url, "[,\\\\s]+")[[1]][1] else paste0("https://cran.r-project.org/package=", p)
+  }, error = function(e) paste0("https://cran.r-project.org/package=", p))
+})
+cat(jsonlite::toJSON(result, auto_unbox = TRUE))
+"""
+            raw = _run(["Rscript", "-e", r_code], timeout=30)
+            if not raw:
+                # Fallback without jsonlite
+                raw = _run(["Rscript", "-e",
+                    'pkgs<-installed.packages();for(i in 1:nrow(pkgs))cat(pkgs[i,"Package"],"\\t",pkgs[i,"Version"],"\\t",tryCatch(packageDescription(pkgs[i,"Package"])$Title,error=function(e)""),"\\n",sep="")'],
+                    timeout=30)
+                if not raw:
+                    return []
+                packages = []
+                for line in raw.splitlines():
+                    parts = line.split("\t", 2)
+                    if len(parts) >= 2:
+                        name = parts[0].strip()
+                        version = parts[1].strip()
+                        title = parts[2].strip() if len(parts) > 2 else ""
+                        packages.append({
+                            "name": name,
+                            "version": version,
+                            "description": title,
+                            "homepage": f"https://cran.r-project.org/package={name}",
+                            "source": "r-package",
+                            "category": "R",
+                            "memo": "",
+                            "update_available": False,
+                        })
+                return packages
+
+            try:
+                r_list = json.loads(raw)
+            except json.JSONDecodeError:
+                return []
+
+            packages = []
+            for pkg in r_list:
+                packages.append({
+                    "name": pkg.get("name", ""),
+                    "version": pkg.get("version", ""),
+                    "description": pkg.get("title", ""),
+                    "homepage": pkg.get("homepage", f"https://cran.r-project.org/package={pkg.get('name','')}"),
+                    "source": "r-package",
+                    "category": "R",
                     "memo": "",
                     "update_available": False,
                 })

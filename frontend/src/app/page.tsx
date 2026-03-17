@@ -52,6 +52,7 @@ const i18n: Record<Lang, Record<string, string>> = {
     "cat:Python (pip)": "Python (pip)",
     "cat:Python (uv tool)": "Python (uv tool)",
     "cat:Utility": "Utility",
+    "cat:R": "R",
   },
   ko: {
     title: "패키지 목록",
@@ -98,6 +99,7 @@ const i18n: Record<Lang, Record<string, string>> = {
     "cat:Python (pip)": "Python (pip)",
     "cat:Python (uv tool)": "Python (uv tool)",
     "cat:Utility": "유틸리티",
+    "cat:R": "R 패키지",
   },
   zh: {
     title: "软件包列表",
@@ -144,6 +146,7 @@ const i18n: Record<Lang, Record<string, string>> = {
     "cat:Python (pip)": "Python (pip)",
     "cat:Python (uv tool)": "Python (uv tool)",
     "cat:Utility": "实用工具",
+    "cat:R": "R 软件包",
   },
 };
 
