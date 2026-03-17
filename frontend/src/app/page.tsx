@@ -227,7 +227,9 @@ export default function Home() {
     setScanning(true);
     setScanProgress({ step: 0, total: 5, label: "" });
     try {
-      const es = new EventSource("/api/packages/scan-stream");
+      // SSE direct to backend (bypass Next.js proxy buffering)
+      const backendPort = process.env.NEXT_PUBLIC_BACKEND_PORT || "8020";
+      const es = new EventSource(`http://localhost:${backendPort}/api/packages/scan-stream`);
       es.onmessage = async (event) => {
         const data = JSON.parse(event.data);
         setScanProgress({ step: data.step, total: data.total, label: data.label || "" });
