@@ -111,3 +111,39 @@ All endpoints are prefixed with `/api`. The backend runs on port 8020 by default
 - **Response:** File download (`text/csv` or `text/markdown`).
   - CSV columns: Source, Category, Name, Version, Description, Homepage, Memo, Update Available, Latest Version.
   - Markdown: Table with the same columns.
+
+---
+
+### 13. Scan with Progress (SSE)
+
+- **Method:** `GET`
+- **Path:** `/api/packages/scan-stream`
+- **Description:** Server-Sent Events endpoint that streams scan progress step by step.
+- **Response:** SSE stream with JSON events:
+  - `{"step": 1, "total": 5, "label": "Homebrew Formulae", "status": "scanning"}`
+  - `{"step": 1, "total": 5, "label": "Homebrew Formulae", "status": "done", "count": 83}`
+  - `{"step": 5, "total": 5, "status": "complete", "count": 654, "snapshot_id": "20260317_193111"}`
+
+---
+
+### 14. List Scan History
+
+- **Method:** `GET`
+- **Path:** `/api/packages/history`
+- **Description:** Returns a list of all scan snapshots sorted by date (newest first).
+- **Response:**
+  ```json
+  {"snapshots": [{"id": "20260317_193111", "date": "2026-03-17 19:31:11", "count": 654, "has_csv": true, "has_md": true}]}
+  ```
+
+---
+
+### 15. Download Snapshot
+
+- **Method:** `GET`
+- **Path:** `/api/packages/history/{snapshot_id}/{fmt}`
+- **Description:** Download a historical scan snapshot.
+- **Path Parameters:**
+  - `snapshot_id`: Timestamp ID (e.g., `20260317_193111`)
+  - `fmt`: File format (`csv`, `md`, or `json`)
+- **Response:** File download.

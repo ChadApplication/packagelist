@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.0.2 (2026-03-17)
+
+- R package scanning (490 packages via Rscript)
+- Scan history: timestamped snapshots with CSV/MD download per entry
+- Scan progress bar: SSE streaming with step-by-step UI (5 stages)
+- Source ordering: Brew → pip → uv → R (custom sort)
+- Multilingual docs (README, docs/ in EN/KO/ZH)
+
 ## v0.0.1 (2026-03-17)
 
 - Initial release

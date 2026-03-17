@@ -29,8 +29,11 @@ Open http://localhost:3020 and click **Scan**.
 
 ## Features
 
-- **Package Scan**: Parallel scanning of Homebrew (formulae + casks), pip, uv tools
-- **Category Filter**: Auto-categorized (AI/LLM, Development, Terminal, Media, etc.)
+- **Package Scan**: Parallel scanning of Homebrew (formulae + casks), pip, uv tools, R packages
+- **Scan Progress Bar**: Real-time SSE streaming with step-by-step progress (5 stages)
+- **Scan History**: Timestamped snapshots with per-entry CSV/MD download
+- **Category Filter**: Auto-categorized (AI/LLM, Development, Terminal, Media, R, etc.)
+- **Source Ordering**: Brew → pip → uv → R (custom sort)
 - **Search**: Real-time search across name, description (multilingual), memo
 - **Sort**: Name ascending/descending toggle
 - **Memo**: Per-package notes, preserved across re-scans
@@ -51,7 +54,8 @@ Open http://localhost:3020 and click **Scan**.
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | /api/health | Health check |
-| POST | /api/packages/scan | Full scan (brew + pip + uv) |
+| POST | /api/packages/scan | Full scan (brew + pip + uv + R) |
+| GET | /api/packages/scan-stream | SSE scan with progress streaming |
 | GET | /api/packages | List packages (?category=, ?q=) |
 | GET | /api/packages/categories | Category counts |
 | PUT | /api/packages/{source}/{name}/memo | Update memo |
@@ -62,19 +66,12 @@ Open http://localhost:3020 and click **Scan**.
 | POST | /api/packages/upgrade-all | Upgrade all outdated |
 | GET | /api/packages/{source}/{name}/manual | Get documentation URLs |
 | GET | /api/packages/export | Export CSV or Markdown (?fmt=csv/md) |
+| GET | /api/packages/history | List scan snapshots |
+| GET | /api/packages/history/{id}/{fmt} | Download snapshot (csv/md/json) |
 
 ## Changelog
 
-### v0.0.1 (2026-03-17)
-
-- Initial release
-- Package scanner (brew, pip, uv parallel scan with descriptions)
-- Dashboard UI (sidebar filter, collapsible groups, inline memo/description editing)
-- Update checker + individual/bulk upgrade
-- Manual/docs links, CSV/MD export
-- Multilingual UI (EN/KO/ZH) + description translation
-- Name sort (asc/desc)
-- Copyright footer with auto-version from git tags
+See [CHANGELOG.md](CHANGELOG.md) for full version history.
 
 ## License
 
